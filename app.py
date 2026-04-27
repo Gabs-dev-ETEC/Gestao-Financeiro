@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 # CONFIGURAÇÃO APP
 # ==============================
 
-load_dotenv()  # carrega o .env
+load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "chave-secreta-local")
 
@@ -72,13 +72,15 @@ class Colaborador(db.Model):
 
 
 class Ficha(db.Model):
-    id             = db.Column(db.Integer, primary_key=True)
-    colaborador_id = db.Column(db.Integer, db.ForeignKey("colaborador.id"))
-    nome_ficha     = db.Column(db.String(50))
-    tipo           = db.Column(db.String(20))
-    conteudo       = db.Column(db.Text)
-    alterado_por   = db.Column(db.String(100))                
-    ultima_alteracao = db.Column(db.DateTime, default=datetime.utcnow)  
+    id               = db.Column(db.Integer, primary_key=True)
+    colaborador_id   = db.Column(db.Integer, db.ForeignKey("colaborador.id"))
+    nome_ficha       = db.Column(db.String(50))
+    tipo             = db.Column(db.String(20))
+    conteudo         = db.Column(db.Text)
+    secao            = db.Column(db.String(100))          # ← NOVO
+    alterado_por     = db.Column(db.String(100))
+    ultima_alteracao = db.Column(db.DateTime, default=datetime.utcnow)
+    pago             = db.Column(db.Integer, default=0) 
 
 # ==============================
 # TABELA CATEGORIA
@@ -98,22 +100,27 @@ class Categoria(db.Model):
 # ==============================
 
 CAMPOS_NORMAL = [
-    {"key": "mes_ref",           "label": "Mês de Referência",  "desconta": False, "soValor": False, "soCaixa": False},
-    {"key": "caixa",             "label": "Caixa",              "desconta": False, "soValor": True,  "soCaixa": True },
-    {"key": "valores_recebidos", "label": "Salário",  "desconta": False, "soValor": True,  "soCaixa": False},
-    {"key": "adiantamento",      "label": "Adiantamento",       "desconta": True,  "soValor": True,  "soCaixa": False},
-    {"key": "clt",               "label": "CLT",                "desconta": False, "soValor": True,  "soCaixa": False},
-    {"key": "gratificacao",      "label": "Gratificação",       "desconta": False, "soValor": True,  "soCaixa": False},
+    {"key": "mes_ref",           "label": "Mês de Referência",       "desconta": False, "soValor": False, "soCaixa": False, "sosBruto": False},
+    {"key": "caixa",             "label": "Caixa",                   "desconta": False, "soValor": True,  "soCaixa": True,  "sosBruto": False},
+    {"key": "valores_recebidos", "label": "Salário",                 "desconta": False, "soValor": True,  "soCaixa": False, "sosBruto": True },
+    {"key": "clt",               "label": "CLT",                     "desconta": False, "soValor": True,  "soCaixa": False, "sosBruto": True },
+    {"key": "gratificacao",      "label": "Gratificação",            "desconta": False, "soValor": True,  "soCaixa": False, "sosBruto": True },
+    {"key": "meta",              "label": "Meta",                    "desconta": False, "soValor": True,  "soCaixa": False, "sosBruto": True },
+    {"key": "vt_pago",           "label": "Vale Transporte (pago)",  "desconta": False, "soValor": True,  "soCaixa": False, "sosBruto": True },
+    {"key": "vt_desconto",       "label": "Desconto VT",             "desconta": True,  "soValor": True,  "soCaixa": False, "sosBruto": False},
+    {"key": "va_pago",           "label": "Vale Alimentação (pago)", "desconta": False, "soValor": True,  "soCaixa": False, "sosBruto": True },
+    {"key": "va_desconto",       "label": "Desconto VA",             "desconta": True,  "soValor": True,  "soCaixa": False, "sosBruto": False},
+    {"key": "adiantamento",      "label": "Adiantamento",            "desconta": True,  "soValor": True,  "soCaixa": False, "sosBruto": False},
 ]
 
 CAMPOS_META = [
-    {"key": "fez_mes_passado",   "label": "Fez mês passado",    "desconta": False, "soValor": True,  "soCaixa": True },
-    {"key": "caixa_mes",         "label": "Caixa deste mês",    "desconta": False, "soValor": True,  "soCaixa": True },
-    {"key": "clt",               "label": "CLT",                "desconta": False, "soValor": True,  "soCaixa": False},
-    {"key": "gratificacao",      "label": "Gratificação",       "desconta": False, "soValor": True,  "soCaixa": False},
-    {"key": "metas_recebidas",   "label": "Metas recebidas",    "desconta": False, "soValor": True,  "soCaixa": False},
-    {"key": "total_metas",       "label": "Total metas",        "desconta": False, "soValor": True,  "soCaixa": False},
-    {"key": "adiantamento",      "label": "Adiantamento",       "desconta": True,  "soValor": True,  "soCaixa": False},
+    {"key": "fez_mes_passado",   "label": "Fez mês passado",    "desconta": False, "soValor": True,  "soCaixa": True,  "sosBruto": False},
+    {"key": "caixa_mes",         "label": "Caixa deste mês",    "desconta": False, "soValor": True,  "soCaixa": True,  "sosBruto": False},
+    {"key": "clt",               "label": "CLT",                "desconta": False, "soValor": True,  "soCaixa": False, "sosBruto": True },
+    {"key": "gratificacao",      "label": "Gratificação",       "desconta": False, "soValor": True,  "soCaixa": False, "sosBruto": True },
+    {"key": "metas_recebidas",   "label": "Metas recebidas",    "desconta": False, "soValor": True,  "soCaixa": False, "sosBruto": True },
+    {"key": "total_metas",       "label": "Total metas",        "desconta": False, "soValor": True,  "soCaixa": False, "sosBruto": True },
+    {"key": "adiantamento",      "label": "Adiantamento",       "desconta": True,  "soValor": True,  "soCaixa": False, "sosBruto": False},
 ]
 
 def get_campos(tipo):
@@ -271,8 +278,9 @@ def criar_ficha():
         nome_ficha=data.get("nome_ficha"),
         tipo=data.get("tipo"),
         conteudo=data.get("conteudo"),
-        alterado_por=current_user.username,               
-        ultima_alteracao=datetime.now()                   
+        secao=data.get("secao") or "Geral",          # ← salva a seção
+        alterado_por=current_user.username,
+        ultima_alteracao=datetime.now()
     )
     db.session.add(ficha)
     db.session.commit()
@@ -284,10 +292,14 @@ def criar_ficha():
 def listar_fichas(colaborador_id):
     fichas = Ficha.query.filter_by(colaborador_id=colaborador_id).all()
     return jsonify([{
-        "id": f.id, "nome_ficha": f.nome_ficha,
-        "tipo": f.tipo, "conteudo": f.conteudo,
-        "alteradoPor": f.alterado_por or "",              # ← NOVO
-        "ultimaAlteracao": f.ultima_alteracao.strftime("%Y-%m-%d %H:%M:%S") if f.ultima_alteracao else ""  # ← NOVO
+        "id": f.id,
+        "nome_ficha": f.nome_ficha,
+        "tipo": f.tipo,
+        "conteudo": f.conteudo,
+        "secao": f.secao or "Geral",
+        "pago": f.pago or 0,           # ← ADICIONE ISSO
+        "alteradoPor": f.alterado_por or "",
+        "ultimaAlteracao": f.ultima_alteracao.strftime("%Y-%m-%d %H:%M:%S") if f.ultima_alteracao else ""
     } for f in fichas])
 
 
@@ -329,23 +341,23 @@ def gerar_pdf_ficha(id):
     riscados = conteudo.get("__riscados__", {})
     extras   = conteudo.get("__outros__",   [])
 
-    caixa = entradas = descontos = 0.0
+    caixa = bruto = descontos = 0.0
     for c in campos:
         if not c["soValor"]:
             continue
         if riscados.get(c["key"]):
             continue
         v = parse_moeda(conteudo.get(c["key"], "0"))
-        if   c["soCaixa"]:  caixa     += v
-        elif c["desconta"]: descontos += v
-        else:               entradas  += v
+        if   c["soCaixa"]:          caixa     += v
+        elif c["desconta"]:         descontos += v
+        elif c.get("sosBruto"):     bruto     += v
 
     for ex in extras:
         if ex.get("riscado"):
             continue
         descontos += parse_moeda(ex.get("valor", "0"))
 
-    liquido = entradas - descontos
+    liquido = bruto - descontos
 
     buffer = io.BytesIO()
     pdf    = canvas.Canvas(buffer, pagesize=A4)
@@ -426,29 +438,40 @@ def gerar_pdf_ficha(id):
         pdf.drawString(50, y - 60, f"PIX: {colaborador.pix}")
 
     y -= CARD_H + 16
-    RESUMO_H = 52
-    metade   = (W - 72 - 8) / 2
 
-    rect_fill(36, y - RESUMO_H, metade, RESUMO_H, (0.94, 0.96, 1.0))
+    RESUMO_H = 52
+    terca    = (W - 72 - 16) / 3
+
+    rect_fill(36, y - RESUMO_H, terca, RESUMO_H, (0.94, 0.96, 1.0))
     rect_fill(36, y - RESUMO_H, 4, RESUMO_H, AZUL_MEDIO)
     pdf.setFont("Helvetica-Bold", 7)
     pdf.setFillColorRGB(*CINZA_TEXTO)
     pdf.drawString(50, y - 14, "CAIXA GERADO")
-    pdf.setFont("Helvetica-Bold", 15)
+    pdf.setFont("Helvetica-Bold", 12)
     pdf.setFillColorRGB(*AZUL_ESCURO)
     pdf.drawString(50, y - 32, fmt_moeda(caixa))
 
-    cx2     = 36 + metade + 8
-    cor_liq = VERDE if liquido >= 0 else VERMELHO
-    rect_fill(cx2, y - RESUMO_H, metade, RESUMO_H,
-              (0.94, 1.0, 0.96) if liquido >= 0 else (1.0, 0.95, 0.95))
-    rect_fill(cx2, y - RESUMO_H, 4, RESUMO_H, cor_liq)
+    cx2 = 36 + terca + 8
+    rect_fill(cx2, y - RESUMO_H, terca, RESUMO_H, (0.93, 0.95, 1.0))
+    rect_fill(cx2, y - RESUMO_H, 4, RESUMO_H, AZUL_MEDIO)
     pdf.setFont("Helvetica-Bold", 7)
     pdf.setFillColorRGB(*CINZA_TEXTO)
-    pdf.drawString(cx2 + 14, y - 14, "SALÁRIO LÍQUIDO")
-    pdf.setFont("Helvetica-Bold", 15)
+    pdf.drawString(cx2 + 14, y - 14, "SALÁRIO BRUTO")
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.setFillColorRGB(*AZUL_ESCURO)
+    pdf.drawString(cx2 + 14, y - 32, fmt_moeda(bruto))
+
+    cx3     = cx2 + terca + 8
+    cor_liq = VERDE if liquido >= 0 else VERMELHO
+    rect_fill(cx3, y - RESUMO_H, terca, RESUMO_H,
+              (0.94, 1.0, 0.96) if liquido >= 0 else (1.0, 0.95, 0.95))
+    rect_fill(cx3, y - RESUMO_H, 4, RESUMO_H, cor_liq)
+    pdf.setFont("Helvetica-Bold", 7)
+    pdf.setFillColorRGB(*CINZA_TEXTO)
+    pdf.drawString(cx3 + 14, y - 14, "SALÁRIO LÍQUIDO")
+    pdf.setFont("Helvetica-Bold", 12)
     pdf.setFillColorRGB(*cor_liq)
-    pdf.drawString(cx2 + 14, y - 32, fmt_moeda(liquido))
+    pdf.drawString(cx3 + 14, y - 32, fmt_moeda(liquido))
 
     y -= RESUMO_H + 18
     LINHA_H  = 34
@@ -601,7 +624,7 @@ class Conta(db.Model):
     paga                  = db.Column(db.Boolean, default=False)
     data_pagamento        = db.Column(db.DateTime)
     ultima_atualizacao    = db.Column(db.DateTime, default=datetime.utcnow)
-    alterado_por          = db.Column(db.String(100))          
+    alterado_por          = db.Column(db.String(100))
 
 # ==============================
 # TABELA SALDO
@@ -611,6 +634,12 @@ class Saldo(db.Model):
     id    = db.Column(db.Integer, primary_key=True)
     valor = db.Column(db.Float, nullable=False)
 
+
+class Pasta(db.Model):
+    id             = db.Column(db.Integer, primary_key=True)
+    colaborador_id = db.Column(db.Integer, db.ForeignKey("colaborador.id"))
+    nome           = db.Column(db.String(100), nullable=False)
+    criada_em      = db.Column(db.DateTime, default=datetime.utcnow)
 
 # ==============================
 # ROTAS PRINCIPAIS
@@ -664,9 +693,8 @@ def listar_contas():
         "metodoPagamento": c.metodo_pagamento,
         "observacoes": c.observacoes, "paga": c.paga,
         "ultimaAtualizacao": c.ultima_atualizacao.strftime("%Y-%m-%d %H:%M:%S"),
-        "alteradoPor": c.alterado_por or ""           
+        "alteradoPor": c.alterado_por or ""
     } for c in Conta.query.all()])
-
 
 
 @app.route("/api/contas", methods=["POST"])
@@ -681,8 +709,8 @@ def criar_conta():
         metodo_pagamento_tipo=data.get("metodoPagamentoTipo"),
         metodo_pagamento=data.get("metodoPagamento"),
         observacoes=data.get("observacoes"), paga=False,
-        alterado_por=current_user.username,              
-        ultima_atualizacao=datetime.now()                 
+        alterado_por=current_user.username,
+        ultima_atualizacao=datetime.now()
     )
     db.session.add(nova)
     db.session.commit()
@@ -700,7 +728,7 @@ def atualizar_conta(id):
         conta.paga = dados["paga"]
         conta.data_pagamento = datetime.now() if dados["paga"] else None
     conta.ultima_atualizacao = datetime.now()
-    conta.alterado_por = current_user.username             # ← NOVO
+    conta.alterado_por = current_user.username
     db.session.commit()
     return jsonify({"mensagem": "Conta atualizada"})
 
@@ -755,6 +783,38 @@ def salvar_saldo():
     return jsonify({"mensagem": "Saldo salvo"})
 
 
+
+
+
+@app.route('/api/fichas/<int:id>/pago', methods=['PUT'])
+@login_required
+def marcar_ficha_paga(id):
+    data = request.get_json()
+    ficha = Ficha.query.get(id)
+    if not ficha:
+        return jsonify({"erro": "Não encontrada"}), 404
+    ficha.pago = 1 if data.get('pago') else 0
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route('/api/dashboard/fichas')
+@login_required
+def dashboard_fichas():
+    fichas = db.session.query(Ficha, Colaborador).join(
+        Colaborador, Colaborador.id == Ficha.colaborador_id
+    ).filter(Ficha.pago == 0, Colaborador.ativo == True).all()
+    
+    return jsonify([{
+        "id": f.id,
+        "nome_ficha": f.nome_ficha,
+        "tipo": f.tipo,
+        "conteudo": f.conteudo,
+        "colaborador_id": f.colaborador_id,
+        "colab_nome": c.nome,
+        "colab_cargo": c.cargo
+    } for f, c in fichas])
+
 # ==============================
 # TIPO DO USUÁRIO LOGADO
 # ==============================
@@ -770,10 +830,12 @@ def me():
 # ==============================
 def migrar_banco():
     migracoes = [
-        ("colaborador", "pix",           "VARCHAR(200)"),
-        ("conta",       "alterado_por",  "VARCHAR(100)"),   # ← NOVO
-        ("ficha",       "alterado_por",  "VARCHAR(100)"),   # ← NOVO
-        ("ficha",       "ultima_alteracao", "DATETIME"),    # ← NOVO
+        ("colaborador", "pix",              "VARCHAR(200)"),
+        ("conta",       "alterado_por",     "VARCHAR(100)"),
+        ("ficha",       "alterado_por",     "VARCHAR(100)"),
+        ("ficha",       "ultima_alteracao", "DATETIME"),
+        ("ficha",       "secao",            "VARCHAR(100)"),   # ← NOVA migração
+        ("ficha",       "pago",             "INTEGER DEFAULT 0"), 
     ]
     with db.engine.connect() as conn:
         for tabela, coluna, tipo in migracoes:
@@ -784,7 +846,7 @@ def migrar_banco():
             except Exception:
                 pass
 
-                
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
@@ -799,4 +861,4 @@ if __name__ == "__main__":
 
         db.session.commit()
 
-    app.run(host='0.0.0.0', port=10000, debug=False) 
+    app.run(host='0.0.0.0', port=10000, debug=False)

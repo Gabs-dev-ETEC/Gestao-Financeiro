@@ -1,3 +1,6 @@
+
+
+
 // ================= HELPERS DE NAVEGAÇÃO =================
 
 function setActiveView(viewId) {
@@ -52,7 +55,6 @@ let contaAtualIndex = -1
 let contaAtualCategoria = ''
 
 // ================= UTILITÁRIO: DATA BR =================
-// Converte "2026-03-20" → "20/03/2026"
 function dataParaBR(str) {
     if (!str) return ''
     const partes = str.split('-')
@@ -204,14 +206,16 @@ function gerarConfetes(quantidade) {
     }
 }
 
-function mostrarPopup(mensagem, comConfetes = false) {
+function mostrarPopup(mensagem, comConfetes = false, tempo = 1500) {
     popupMessage.textContent = mensagem
     popupOverlay.classList.add('show')
+
     if (comConfetes) gerarConfetes(50)
+
     setTimeout(() => {
         popupOverlay.classList.remove('show')
-        setTimeout(() => confettiContainer.innerHTML = '', 500)
-    }, 3000)
+        setTimeout(() => confettiContainer.innerHTML = '', 300)
+    }, tempo)
 }
 
 function formatarDataRelativa(dataString, alteradoPor = "") {
@@ -233,7 +237,7 @@ function formatarDataRelativa(dataString, alteradoPor = "") {
 }
 // ================= TOTAIS =================
 
-function atualizarTotais() {
+async function atualizarTotais() {
     let totalPago = 0, totalAPagar = 0
     Object.keys(contas).forEach(cat => {
         contas[cat].forEach(c => {
@@ -241,10 +245,47 @@ function atualizarTotais() {
             else totalAPagar += parseFloat(c.valor)
         })
     })
+
+    try {
+        const res = await fetch("/api/dashboard/fichas")
+        if (res.ok) {
+            const fichas = await res.json()
+            fichas.forEach(f => {
+                let liquido = 0
+                try {
+                    const dados    = JSON.parse(f.conteudo || "{}")
+                    const campos   = f.tipo === "meta" ? CAMPOS_META : CAMPOS_NORMAL
+                    const riscados = dados["__riscados__"] || {}
+                    const extras   = dados["__outros__"] || []
+
+                    campos.forEach(c => {
+                        if (!c.soValor || riscados[c.key] || c.soCaixa) return
+                        const v = parseMoeda(dados[c.key] || "0")
+                        if (!c.somenteDesconto && !c.excluiLiquido) liquido += v
+                        if (c.somenteDesconto) liquido -= v
+                        if (c.temDesconto && !c.excluiLiquido) {
+                            const kd = c.keyDesc || null
+                            if (kd) liquido -= parseMoeda(dados[kd] || "0")
+                        }
+                    })
+                    extras.forEach(ex => {
+                        if (ex.riscado) return
+                        liquido += parseMoeda(ex.valor || "0")
+                        liquido -= parseMoeda(ex.desconto || "0")
+                    })
+                } catch(e) {}
+
+                totalAPagar += liquido
+            })
+        }
+    } catch(e) {}
+
+await renderizarFichasEmContas();  
+
     saldoInicialDisplay.textContent = formatarMoeda(saldoInicial)
     totalGastoDisplay.textContent   = formatarMoeda(totalPago)
     ajusteGastosDisplay.textContent = formatarMoeda(totalAPagar)
-    saldoFinalElement.textContent   = formatarMoeda(saldoInicial - totalPago)
+    saldoFinalElement.textContent   = formatarMoeda(saldoInicial - totalPago - totalAPagar)
 }
 
 // ================= CARREGAR DO SERVIDOR =================
@@ -337,7 +378,6 @@ function renderizarCategorias(showOverdueOnly = false) {
             const isHoje    = conta.vencimento === today
 
             let badgeClass = 'badge-normal'
-            // Exibe data no formato BR
             let badgeLabel = dataParaBR(conta.vencimento)
             if (isOverdue) { badgeClass = 'badge-vencida'; badgeLabel = 'VENCIDA' }
             else if (isHoje) { badgeClass = 'badge-hoje';   badgeLabel = 'HOJE' }
@@ -394,7 +434,6 @@ function mostrarDetalhes(conta, categoria, index) {
     detalhesAtualizacaoElement.textContent = conta.ultimaAtualizacao
         ? formatarDataRelativa(conta.ultimaAtualizacao, conta.alteradoPor || "")  // ← NOVO: segundo argumento
         : ''
-    // ... resto igual, não muda nada
     detalhesNomeElement.textContent        = conta.descricao
     detalhesValorElement.textContent       = formatarMoeda(conta.valor)
     detalhesVencimentoElement.textContent  = dataParaBR(conta.vencimento)
@@ -485,7 +524,6 @@ async function carregarHistorico() {
                 justify-content:space-between;gap:12px;margin-bottom:6px;
                 box-shadow:var(--sombra);
             `
-            // Data de pagamento no formato BR
             const dtPag = c.dataPagamento
                 ? new Date(c.dataPagamento).toLocaleDateString("pt-BR") : "—"
             const valor = new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(c.valor||0)
@@ -556,37 +594,63 @@ if (importButton) {
             return
         }
         const reader = new FileReader()
-        reader.onload = function(e) {
+        reader.onload = async function(e) {
             try {
                 const rows = e.target.result.split('\n').map(r => r.trim()).filter(r => r.length > 0)
                 if (rows.length < 2) throw new Error("Arquivo vazio ou sem dados suficientes.")
                 const headers = rows[0].split(',').map(h => h.trim())
                 if (JSON.stringify(headers) !== JSON.stringify(CSV_FILE_HEADERS))
-                    throw new Error(`Cabeçalhos inválidos.`)
+                    throw new Error(`Cabeçalhos inválidos. Esperado: ${CSV_FILE_HEADERS.join(', ')}`)
+
+                importMessage.textContent = "Importando..."
+                importButton.disabled = true
+
                 let importedCount = 0
-                rows.slice(1).forEach(row => {
-                    const values = row.split(',').map(v => v.trim())
-                    if (values.length === CSV_FILE_HEADERS.length) {
-                        const nc = {
-                            categoria: values[0], descricao: values[1],
-                            valor: parseFloat(values[2]), vencimento: values[3],
-                            metodoPagamentoTipo: values[4], metodoPagamento: values[5],
-                            observacoes: values[6], paga: false,
-                            ultimaAtualizacao: new Date().toISOString()
-                        }
-                        if (!contas[nc.categoria]) contas[nc.categoria] = []
-                        contas[nc.categoria].push(nc)
-                        importedCount++
+                let erros = 0
+
+                for (const row of rows.slice(1)) {
+                    const values = row.match(/(".*?"|[^,]+)(?=,|$)/g)
+                        ?.map(v => v.replace(/^"|"$/g, '').trim()) 
+                        ?? row.split(',').map(v => v.trim())
+
+                    if (values.length < CSV_FILE_HEADERS.length) continue
+
+                    const novaConta = {
+                        categoria:           values[0],
+                        descricao:           values[1],
+                        valor:               parseFloat(values[2].replace(',', '.')),
+                        vencimento:          values[3],
+                        metodoPagamentoTipo: values[4],
+                        metodoPagamento:     values[5],
+                        observacoes:         values[6] || ""
                     }
-                })
-                if (importedCount > 0) {
-                    renderizarCategorias(showOverdueOnlyCheck.checked)
-                    importMessage.textContent = `Sucesso! ${importedCount} conta(s) importada(s).`
-                } else {
-                    importMessage.textContent = "Nenhuma conta importada. Verifique os dados."
+
+                    if (!novaConta.categoria || !novaConta.descricao || isNaN(novaConta.valor)) continue
+
+                    const res = await fetch("/api/contas", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(novaConta)
+                    })
+
+                    if (res.ok) importedCount++
+                    else erros++
                 }
+
+                await carregarContasDoServidor()
+                csvFileInput.value = ""
+
+                if (erros > 0)
+                    importMessage.textContent = `${importedCount} importada(s), ${erros} com erro.`
+                else
+                    importMessage.textContent = `✅ ${importedCount} conta(s) importada(s) com sucesso!`
+
+                if (importedCount > 0) mostrarPopup(`${importedCount} conta(s) importada(s)!`)
+
             } catch (err) {
                 importMessage.textContent = `Erro: ${err.message}`
+            } finally {
+                importButton.disabled = false
             }
         }
         reader.readAsText(file)
@@ -664,6 +728,12 @@ document.getElementById('btnHistorico').addEventListener('click', () => {
     carregarHistorico()
 })
 
+if (returnButton) {
+    returnButton.addEventListener('click', () => {
+        setActiveView('contasView')
+    })
+}
+
 // ================= INICIALIZAÇÃO =================
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -671,4 +741,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await carregarCategorias()
     await carregarSaldoDoServidor()
     await carregarContasDoServidor()
+      await renderizarFichasEmContas()  
+      setInterval(() => {
+  carregarFichas(); 
+}, 3000);
+
 })

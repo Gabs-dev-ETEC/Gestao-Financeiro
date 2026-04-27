@@ -27,7 +27,6 @@
         }
     </script>
 
-    {# ── Expõe o tipo do usuário para os scripts JS ── #}
     <script>
         const USER_TIPO = "{{ tipo }}";
     </script>
@@ -131,13 +130,13 @@
                 </label>
             </div>
 
+<div id="fichasColabContainer" style="margin-bottom: 16px;"></div>
             <div id="categoriasList"></div>
 
             <hr class="divider">
 
             {% if tipo == "admin" %}
 
-            <!-- Adicionar conta -->
             <div class="collapseSection">
                 <div class="collapseHeader" id="addContaHeader">
                     <h2>Adicionar Nova Conta</h2>
@@ -148,7 +147,6 @@
                 <div id="addContaContent" class="collapseBody hidden">
                     <form id="contaForm" class="formGrid">
 
-                        <!-- Select preenchido dinamicamente pelo JS -->
                         <select id="categoriaInput" required>
                             <option value="" disabled selected>Selecione a Categoria</option>
                         </select>
@@ -181,7 +179,6 @@
                 </div>
             </div>
 
-            <!-- Atualização de valores -->
             <div class="collapseSection">
                 <div class="collapseHeader" id="atualizacaoValoresHeader">
                     <h2>Atualização de Valores</h2>
@@ -200,7 +197,6 @@
                 </div>
             </div>
 
-            <!-- Gerenciar Categorias -->
             <div class="collapseSection">
                 <div class="collapseHeader" id="gerenciarCategoriasHeader">
                     <h2>Gerenciar Categorias</h2>
@@ -210,7 +206,6 @@
                 </div>
                 <div id="gerenciarCategoriasContent" class="collapseBody hidden">
 
-                    <!-- Adicionar nova categoria -->
                     <div style="display:flex;gap:10px;align-items:center;margin-bottom:1rem;">
                         <input type="text"
                             id="nomeNovaCategoria"
@@ -230,7 +225,6 @@
                         </button>
                     </div>
 
-                    <!-- Lista de categorias existentes -->
                     <div id="listaCategorias" style="display:flex;flex-direction:column;gap:6px;"></div>
 
                 </div>
@@ -239,7 +233,6 @@
             {% endif %}
 
         </div>
-        <!-- /contasView -->
 
         <!-- ===== VIEW: DETALHES ===== -->
         <div id="detalhesView" class="view hidden">
@@ -294,6 +287,7 @@
         </div>
 
         <!-- ===== VIEW: COLABORADORES ===== -->
+        
         <div id="colaboradoresView" class="view hidden">
 
             <div class="pageHeader">
@@ -302,6 +296,9 @@
                     <p class="pageSubtitle">Gerencie a equipe da instituição</p>
                 </div>
             </div>
+
+            <div id="dashColabContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px;"></div>
+
 
             {% if tipo == "admin" %}
             <div class="collapseSection">
@@ -312,11 +309,7 @@
                     </svg>
                 </div>
                 <div id="addColabContent" class="collapseBody">
-                  <!--
-  No seu index.html, dentro do bloco "Adicionar Colaborador",
-  substitua o <form id="colaboradorForm"> pelo trecho abaixo.
-  A única mudança é a adição do campo PIX antes do botão submit.
--->
+
 
 <form id="colaboradorForm" class="formGrid">
     <input type="text" id="nomeColaborador" placeholder="Nome completo" required>
@@ -332,7 +325,6 @@
         <option value="diretor">Diretor</option>
         <option value="outros">Outros</option>
     </select>
-    <!-- ← CAMPO PIX (ocupa as 2 colunas) -->
     <input type="text"
         id="pixColaborador"
         placeholder="Chave PIX (CPF, e-mail, telefone ou chave aleatória)"
@@ -366,8 +358,9 @@
                 <h2 class="ficha-modal-nome" id="fichaHeaderNome">Colaborador</h2>
                 <div class="ficha-modal-meta">
                     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px;">
-                        <input id="mesFicha" placeholder="Ex: Março 2025" class="ficha-input-mes"
-                            oninput="atualizarHeaderMes(this.value)"/>
+                       <input id="mesFicha" placeholder="Ex: Março 2025" class="ficha-input-mes"
+    oninput="atualizarHeaderMes(this.value)"
+    onblur="preencherDatasAutomaticas()"/>
                         <select id="tipoFicha" class="ficha-input-tipo">
                             <option value="normal">Ficha Normal</option>
                             <option value="meta">Ficha de Metas</option>
