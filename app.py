@@ -96,10 +96,6 @@ class Categoria(db.Model):
 
 
 
-with app.app_context():
-    db.create_all() 
-
-
 # ==============================
 # CAMPOS DAS FICHAS (espelho do JS)
 # ==============================
