@@ -95,6 +95,11 @@ class Categoria(db.Model):
         return {"id": self.id, "nome": self.nome, "cor": self.cor}
 
 
+
+with app.app_context():
+    db.create_all() 
+
+
 # ==============================
 # CAMPOS DAS FICHAS (espelho do JS)
 # ==============================
