@@ -680,6 +680,36 @@ def logout():
     return jsonify({"mensagem": "Logout realizado"})
 
 
+
+
+
+
+
+@app.route('/setup-usuario-temp-xyz123')
+def setup_usuario():
+    from werkzeug.security import generate_password_hash
+    usuarios = [
+        ("86496824134", "86496824134", "user"),
+         ("novo_username", "nova_senha", "user"),
+    ]
+    for username, senha, tipo in usuarios:
+        existe = Usuario.query.filter_by(username=username).first()
+        if not existe:
+            novo = Usuario(
+                username=username,
+                password_hash=generate_password_hash(senha),
+                tipo=tipo
+            )
+            db.session.add(novo)
+    db.session.commit()
+    return 'Pronto!'
+
+
+
+
+
+
+
 # ==============================
 # ROTAS CONTAS
 # ==============================
