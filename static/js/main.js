@@ -594,65 +594,72 @@ if (importButton) {
             return
         }
         const reader = new FileReader()
-        reader.onload = async function(e) {
-            try {
-                const rows = e.target.result.split('\n').map(r => r.trim()).filter(r => r.length > 0)
-                if (rows.length < 2) throw new Error("Arquivo vazio ou sem dados suficientes.")
-                const headers = rows[0].split(',').map(h => h.trim())
-                if (JSON.stringify(headers) !== JSON.stringify(CSV_FILE_HEADERS))
-                    throw new Error(`Cabeçalhos inválidos. Esperado: ${CSV_FILE_HEADERS.join(', ')}`)
+reader.onload = async function(e) {
+    try {
+        const rows = e.target.result
+            .split('\n')
+            .map(r => r.trim())
+            .filter(r => r.length > 0)
 
-                importMessage.textContent = "Importando..."
-                importButton.disabled = true
+        if (rows.length < 2) throw new Error("Arquivo vazio ou sem dados suficientes.")
 
-                let importedCount = 0
-                let erros = 0
+        // Detecta separador automaticamente (vírgula ou ponto e vírgula)
+        const separador = rows[0].includes(';') ? ';' : ','
 
-                for (const row of rows.slice(1)) {
-                    const values = row.match(/(".*?"|[^,]+)(?=,|$)/g)
-                        ?.map(v => v.replace(/^"|"$/g, '').trim()) 
-                        ?? row.split(',').map(v => v.trim())
+        const headers = rows[0].split(separador).map(h => h.trim().replace(/^"|"$/g, ''))
+        if (JSON.stringify(headers) !== JSON.stringify(CSV_FILE_HEADERS))
+            throw new Error(`Cabeçalhos inválidos. Esperado: ${CSV_FILE_HEADERS.join(', ')}`)
 
-                    if (values.length < CSV_FILE_HEADERS.length) continue
+        importMessage.textContent = "Importando..."
+        importButton.disabled = true
 
-                    const novaConta = {
-                        categoria:           values[0],
-                        descricao:           values[1],
-                        valor:               parseFloat(values[2].replace(',', '.')),
-                        vencimento:          values[3],
-                        metodoPagamentoTipo: values[4],
-                        metodoPagamento:     values[5],
-                        observacoes:         values[6] || ""
-                    }
+        let importedCount = 0, erros = 0
 
-                    if (!novaConta.categoria || !novaConta.descricao || isNaN(novaConta.valor)) continue
+        for (const row of rows.slice(1)) {
+            // Split respeitando campos entre aspas
+            const values = row.split(separador).map(v => v.trim().replace(/^"|"$/g, ''))
 
-                    const res = await fetch("/api/contas", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(novaConta)
-                    })
+            // Preenche campos faltando com string vazia
+            while (values.length < CSV_FILE_HEADERS.length) values.push('')
 
-                    if (res.ok) importedCount++
-                    else erros++
-                }
-
-                await carregarContasDoServidor()
-                csvFileInput.value = ""
-
-                if (erros > 0)
-                    importMessage.textContent = `${importedCount} importada(s), ${erros} com erro.`
-                else
-                    importMessage.textContent = `✅ ${importedCount} conta(s) importada(s) com sucesso!`
-
-                if (importedCount > 0) mostrarPopup(`${importedCount} conta(s) importada(s)!`)
-
-            } catch (err) {
-                importMessage.textContent = `Erro: ${err.message}`
-            } finally {
-                importButton.disabled = false
+            const novaConta = {
+                categoria:           values[0],
+                descricao:           values[1],
+                valor:               parseFloat(values[2].replace(',', '.')),
+                vencimento:          values[3],
+                metodoPagamentoTipo: values[4],
+                metodoPagamento:     values[5],
+                observacoes:         values[6] || ""
             }
+
+            if (!novaConta.categoria || !novaConta.descricao || isNaN(novaConta.valor)) continue
+
+            const res = await fetch("/api/contas", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(novaConta)
+            })
+
+            if (res.ok) importedCount++
+            else erros++
         }
+
+        await carregarContasDoServidor()
+        csvFileInput.value = ""
+
+        if (erros > 0)
+            importMessage.textContent = `${importedCount} importada(s), ${erros} com erro.`
+        else
+            importMessage.textContent = `✅ ${importedCount} conta(s) importada(s) com sucesso!`
+
+        if (importedCount > 0) mostrarPopup(`${importedCount} conta(s) importada(s)!`)
+
+    } catch (err) {
+        importMessage.textContent = `Erro: ${err.message}`
+    } finally {
+        importButton.disabled = false
+    }
+}
         reader.readAsText(file)
     })
 }
