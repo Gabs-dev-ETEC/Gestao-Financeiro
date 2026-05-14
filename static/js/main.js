@@ -742,9 +742,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     await carregarCategorias()
     await carregarSaldoDoServidor()
     await carregarContasDoServidor()
-      await renderizarFichasEmContas()  
-      setInterval(() => {
-  carregarFichas(); 
-}, 3000);
-
 })

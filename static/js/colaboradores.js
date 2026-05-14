@@ -75,7 +75,18 @@ document.getElementById("tipoFicha").addEventListener("change", (e) => {
     if (_modalColabId !== null) renderFichaModal(e.target.value)
 })
 
+setActiveView("contasView")
+    document.getElementById("btnContas").classList.add("active")
+
+    // Inicialização das fichas na aba contas
+    renderizarFichasEmContas()
+    setInterval(() => {
+        renderizarFichasEmContas()
+    }, 30000)
+
 }) 
+
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VARIÁVEIS GLOBAIS
