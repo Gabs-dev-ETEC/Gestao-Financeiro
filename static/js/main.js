@@ -104,45 +104,10 @@ function renderizarListaCategorias() {
     }
 
     _categorias.forEach(cat => {
-        const item = document.createElement("div")
-        item.style.cssText = `
-            display:flex;align-items:center;gap:10px;
-            background:var(--branco);
-            border:1.5px solid var(--cinza-borda);
-            border-left:4px solid ${cat.cor};
-            border-radius:8px;
-            padding:10px 14px;
-        `
-        const bolinha = document.createElement("div")
-        bolinha.style.cssText = `width:14px;height:14px;border-radius:50%;
-            background:${cat.cor};flex-shrink:0;`
+   card.style.cursor = "pointer";
+                card.addEventListener("click", () => abrirFichaDeContas(f.colaborador_id, f.id));
+                lista.appendChild(card);
 
-        const nome = document.createElement("span")
-        nome.style.cssText = "flex:1;font-size:0.92rem;font-weight:600;color:var(--texto);"
-        nome.textContent = cat.nome
-
-        item.appendChild(bolinha)
-        item.appendChild(nome)
-
-        if (IS_ADMIN) {
-            const btnDel = document.createElement("button")
-            btnDel.title = "Excluir categoria"
-            btnDel.style.cssText = `background:none;border:none;cursor:pointer;
-                color:var(--cinza-borda);padding:4px;border-radius:4px;
-                display:flex;align-items:center;transition:all 0.15s;`
-            btnDel.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
-                <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
-            </svg>`
-            btnDel.onmouseenter = () => { btnDel.style.color="#c0392b"; btnDel.style.background="#fee2e2" }
-            btnDel.onmouseleave = () => { btnDel.style.color="var(--cinza-borda)"; btnDel.style.background="none" }
-            btnDel.onclick = () => excluirCategoria(cat.id, cat.nome)
-            item.appendChild(btnDel)
-        }
-
-        lista.appendChild(item)
     })
 }
 
@@ -278,14 +243,43 @@ async function atualizarTotais() {
                 totalAPagar += liquido
             })
         }
-    } catch(e) {}
+} catch(e) {}
 
-await renderizarFichasEmContas();  
+    await renderizarFichasEmContas();
 
     saldoInicialDisplay.textContent = formatarMoeda(saldoInicial)
     totalGastoDisplay.textContent   = formatarMoeda(totalPago)
     ajusteGastosDisplay.textContent = formatarMoeda(totalAPagar)
     saldoFinalElement.textContent   = formatarMoeda(saldoInicial - totalPago - totalAPagar)
+}
+
+// ================= ABRIR FICHA A PARTIR DAS CONTAS =================
+
+async function abrirFichaDeContas(colaboradorId, fichaId) {
+    document.querySelectorAll('.navItem').forEach(b => b.classList.remove('active'))
+    document.getElementById('btnColaboradores').classList.add('active')
+    setActiveView('colaboradoresView')
+
+    await carregarColaboradores()
+
+    const cardColab = document.querySelector(`[data-colab-id="${colaboradorId}"]`)
+    if (!cardColab) return
+
+    const headerColab = cardColab.querySelector(':scope > div:first-child')
+    if (headerColab) headerColab.click()
+
+    setTimeout(() => {
+        cardColab.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 300)
+
+    setTimeout(async () => {
+        const res = await fetch(`/api/fichas/${colaboradorId}`)
+        const fichas = await res.json()
+        const ficha = fichas.find(f => f.id === fichaId)
+        if (!ficha) return
+        const colaborador = JSON.parse(cardColab.dataset.colabJson || '{}')
+        abrirFicha(ficha, colaborador)
+    }, 600)
 }
 
 // ================= CARREGAR DO SERVIDOR =================

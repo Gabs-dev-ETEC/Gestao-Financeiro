@@ -1164,37 +1164,39 @@ async function renderizarFichasEmContas() {
         lista.className = "contas-lista";
         lista.style.display = "none";
 
-        Object.values(porColab).forEach(({ nome, cargo, fichas: fichasColab }) => {
-            fichasColab.forEach(f => {
-                const card = document.createElement("div");
-                card.className = "conta-card";
-                card.innerHTML = `
-                    <div class="conta-card-barra" style="background:#1e4d8c;"></div>
-                    <div class="conta-card-corpo">
-                        <div class="conta-card-topo">
-                            <span class="conta-descricao">${nome} · ${f.nome}</span>
-                            <span class="conta-valor">${formatarMoeda(f.liquido)}</span>
-                        </div>
-                        <div class="conta-card-rodape">
-                            <span class="conta-metodo">
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2">
-                                    <circle cx="9" cy="7" r="4"/>
-                                    <path d="M2 21v-2a4 4 0 014-4h6a4 4 0 014 4v2"/>
-                                </svg>
-                                ${cargo || "Colaborador"}
-                            </span>
-                            <span class="badge badge-normal">PENDENTE</span>
-                        </div>
-                    </div>
-                    <svg class="conta-card-seta" width="16" height="16" viewBox="0 0 24 24"
-                        fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="9 18 15 12 9 6"/>
-                    </svg>`;
-                lista.appendChild(card);
-            });
-        });
-
+Object.entries(porColab).forEach(([colabId, { nome, cargo, fichas: fichasColab }]) => {
+    fichasColab.forEach(f => {
+        const card = document.createElement("div");
+        card.className = "conta-card";
+        card.style.cursor = "pointer";
+        card.innerHTML = `
+            <div class="conta-card-barra" style="background:#1e4d8c;"></div>
+            <div class="conta-card-corpo">
+                <div class="conta-card-topo">
+                    <span class="conta-descricao">${nome}</span>
+                    <span class="conta-valor">${formatarMoeda(f.liquido)}</span>
+                </div>
+                <div class="conta-card-rodape">
+                    <span class="conta-metodo">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M2 21v-2a4 4 0 014-4h6a4 4 0 014 4v2"/>
+                        </svg>
+                        ${cargo || "Colaborador"}
+                    </span>
+                    <span class="badge badge-normal">${f.nome}</span>
+                </div>
+            </div>
+            <svg class="conta-card-seta" width="16" height="16" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"/>
+            </svg>
+        `;
+        card.addEventListener("click", () => abrirFichaDeContas(parseInt(colabId), f.id));
+        lista.appendChild(card);
+    });
+});
         let aberto = false;
         const setaEl = right.querySelector("svg");
         header.addEventListener("click", () => {
