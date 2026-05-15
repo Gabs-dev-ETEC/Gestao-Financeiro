@@ -79,10 +79,13 @@ setActiveView("contasView")
     document.getElementById("btnContas").classList.add("active")
 
     // Inicialização das fichas na aba contas
+renderizarFichasEmContas()
+carregarDashboardColaboradores()
+
+setInterval(() => {
     renderizarFichasEmContas()
-    setInterval(() => {
-        renderizarFichasEmContas()
-    }, 30000)
+    carregarDashboardColaboradores()
+}, 30000)
 
 }) 
 

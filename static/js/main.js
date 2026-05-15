@@ -103,12 +103,27 @@ function renderizarListaCategorias() {
         return
     }
 
-    _categorias.forEach(cat => {
-   card.style.cursor = "pointer";
-                card.addEventListener("click", () => abrirFichaDeContas(f.colaborador_id, f.id));
-                lista.appendChild(card);
-
-    })
+  _categorias.forEach(cat => {
+    const item = document.createElement("div")
+    item.style.cssText = `
+        display:flex;align-items:center;justify-content:space-between;
+        padding:8px 12px;background:var(--branco);border:1.5px solid var(--cinza-borda);
+        border-left:4px solid ${cat.cor || '#5a6a85'};border-radius:8px;
+        font-size:0.85rem;
+    `
+    item.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;">
+            <span style="width:12px;height:12px;border-radius:50%;
+                background:${cat.cor || '#5a6a85'};display:inline-block;"></span>
+            <span style="font-weight:600;color:var(--texto);">${cat.nome}</span>
+        </div>
+        ${IS_ADMIN ? `<button onclick="excluirCategoria(${cat.id}, '${cat.nome}')"
+            style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:0.8rem;
+            font-weight:700;padding:2px 8px;border-radius:5px;opacity:0.7;"
+            title="Excluir categoria">✕</button>` : ''}
+    `
+    lista.appendChild(item)
+})
 }
 
 async function adicionarCategoria() {
