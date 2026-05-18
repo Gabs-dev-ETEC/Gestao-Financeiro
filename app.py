@@ -753,16 +753,29 @@ def criar_conta():
 def atualizar_conta(id):
     conta = Conta.query.get_or_404(id)
     dados = request.json
-    if current_user.tipo != "admin" and "paga" not in dados:
+
+    # Não-admins só podem marcar como paga/não paga
+    if current_user.tipo != "admin" and set(dados.keys()) - {"paga"}:
         return jsonify({"erro": "Acesso negado"}), 403
+
     if "paga" in dados:
         conta.paga = dados["paga"]
         conta.data_pagamento = datetime.now() if dados["paga"] else None
+
+    # Campos editáveis por admin
+    if current_user.tipo == "admin":
+        if "categoria"           in dados: conta.categoria             = dados["categoria"]
+        if "descricao"           in dados: conta.descricao             = dados["descricao"]
+        if "valor"               in dados: conta.valor                 = float(dados["valor"])
+        if "vencimento"          in dados: conta.vencimento            = dados["vencimento"]
+        if "metodoPagamentoTipo" in dados: conta.metodo_pagamento_tipo = dados["metodoPagamentoTipo"]
+        if "metodoPagamento"     in dados: conta.metodo_pagamento      = dados["metodoPagamento"]
+        if "observacoes"         in dados: conta.observacoes           = dados["observacoes"]
+
     conta.ultima_atualizacao = datetime.now()
     conta.alterado_por = current_user.username
     db.session.commit()
     return jsonify({"mensagem": "Conta atualizada"})
-
 
 @app.route("/api/contas/<int:id>", methods=["DELETE"])
 @login_required

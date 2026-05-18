@@ -437,8 +437,86 @@ function renderizarCategorias(showOverdueOnly = false) {
     atualizarTotais()
 }
 
+
+// ================= EDITAR CONTA =================
+
+
+async function salvarEdicaoConta() {
+    if (!contaAtualCategoria || contaAtualIndex === -1) return
+    const conta = contas[contaAtualCategoria][contaAtualIndex]
+
+    const dadosAtualizados = {
+        categoria:           document.getElementById('editCategoriaInput').value,
+        descricao:           document.getElementById('editDescricaoInput').value,
+        valor:               parseFloat(document.getElementById('editValorInput').value),
+        vencimento:          document.getElementById('editVencimentoInput').value,
+        metodoPagamentoTipo: document.getElementById('editMetodoPagamentoTipoInput').value,
+        metodoPagamento:     document.getElementById('editMetodoPagamentoValorInput').value,
+        observacoes:         document.getElementById('editObservacoesInput').value
+    }
+
+    console.log('[editar conta] payload:', dadosAtualizados)
+
+    if (!dadosAtualizados.descricao || isNaN(dadosAtualizados.valor)) {
+        mostrarPopup('Preencha os campos obrigatórios.')
+        return
+    }
+
+    const res = await fetch(`/api/contas/${conta.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dadosAtualizados)
+    })
+
+    console.log('[editar conta] status resposta:', res.status)
+
+    if (res.ok) {
+        fecharModalEdicao()
+        mostrarPopup('Conta atualizada com sucesso!')
+        await carregarContasDoServidor()
+        setActiveView('contasView')
+    } else {
+        const erro = await res.json().catch(() => ({}))
+        console.error('[editar conta] erro:', erro)
+        mostrarPopup('Erro ao salvar alterações.')
+    }
+}
+
+function fecharModalEdicao() {
+    document.getElementById('modalEditarConta').style.display = 'none'
+}
+
+function abrirModalEdicao() {
+    if (!contaAtualCategoria || contaAtualIndex === -1) return
+    const conta = contas[contaAtualCategoria][contaAtualIndex]
+
+    // Preencher o select de categorias do modal
+    const sel = document.getElementById('editCategoriaInput')
+    sel.innerHTML = '<option value="" disabled>Selecione a Categoria</option>'
+    _categorias.forEach(cat => {
+        const opt = document.createElement('option')
+        opt.value = cat.nome
+        opt.textContent = cat.nome
+        if (cat.nome === conta.categoria) opt.selected = true
+        sel.appendChild(opt)
+    })
+
+    // Preencher os campos com os dados atuais
+    document.getElementById('editDescricaoInput').value          = conta.descricao || ''
+    document.getElementById('editValorInput').value              = conta.valor || ''
+    document.getElementById('editVencimentoInput').value         = conta.vencimento || ''
+    document.getElementById('editMetodoPagamentoTipoInput').value = conta.metodoPagamentoTipo || ''
+    document.getElementById('editMetodoPagamentoValorInput').value = conta.metodoPagamento || ''
+    document.getElementById('editObservacoesInput').value        = conta.observacoes || ''
+
+    // Exibir o modal
+    const modal = document.getElementById('modalEditarConta')
+    modal.style.display = 'flex'
+}
 // ================= DETALHES =================
 function mostrarDetalhes(conta, categoria, index) {
+    const editButton = document.getElementById('editButton')
+if (editButton) editButton.style.display = IS_ADMIN ? '' : 'none'
     setActiveView('detalhesView')
     detalhesAtualizacaoElement.textContent = conta.ultimaAtualizacao
         ? formatarDataRelativa(conta.ultimaAtualizacao, conta.alteradoPor || "")  // ← NOVO: segundo argumento
@@ -750,6 +828,7 @@ if (returnButton) {
     })
 }
 
+
 // ================= INICIALIZAÇÃO =================
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -757,4 +836,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     await carregarCategorias()
     await carregarSaldoDoServidor()
     await carregarContasDoServidor()
+
+    document.getElementById('editButton')?.addEventListener('click', () => {
+        if (!contaAtualCategoria || contaAtualIndex === -1) return
+        abrirModalEdicao()
+    })
+    document.getElementById('btnFecharModalEdicao')?.addEventListener('click', fecharModalEdicao)
+    document.getElementById('btnCancelarEdicao')?.addEventListener('click', fecharModalEdicao)
+    document.getElementById('btnSalvarEdicao')?.addEventListener('click', salvarEdicaoConta)
 })
