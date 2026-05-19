@@ -9,6 +9,8 @@ from reportlab.pdfgen import canvas
 import io
 import json
 import os
+import threading
+import queue
 from datetime import date
 from sqlalchemy import text
 from dotenv import load_dotenv
@@ -33,6 +35,25 @@ db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "home"
+
+# ==============================
+# SSE — BROADCAST PARA CLIENTES
+# ==============================
+
+_sse_listeners = []
+_sse_lock = threading.Lock()
+
+def _broadcast(msg: str):
+    """Grita para todos os clientes SSE conectados."""
+    dead = []
+    with _sse_lock:
+        for q in _sse_listeners:
+            try:
+                q.put_nowait(msg)
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            _sse_listeners.remove(q)
 
 # ==============================
 # MODEL USUÁRIO
@@ -77,10 +98,10 @@ class Ficha(db.Model):
     nome_ficha       = db.Column(db.String(50))
     tipo             = db.Column(db.String(20))
     conteudo         = db.Column(db.Text)
-    secao            = db.Column(db.String(100))          # ← NOVO
+    secao            = db.Column(db.String(100))
     alterado_por     = db.Column(db.String(100))
     ultima_alteracao = db.Column(db.DateTime, default=datetime.utcnow)
-    pago             = db.Column(db.Integer, default=0) 
+    pago             = db.Column(db.Integer, default=0)
 
 # ==============================
 # TABELA CATEGORIA
@@ -163,6 +184,42 @@ def manifest():
 
 
 # ==============================
+# ROTA SSE
+# ==============================
+
+@app.route("/api/eventos")
+@login_required
+def sse_eventos():
+    def stream():
+        q = queue.Queue(maxsize=10)
+        with _sse_lock:
+            _sse_listeners.append(q)
+        try:
+            yield "data: conectado\n\n"
+            while True:
+                try:
+                    msg = q.get(timeout=25)
+                    yield f"data: {msg}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        finally:
+            with _sse_lock:
+                try:
+                    _sse_listeners.remove(q)
+                except ValueError:
+                    pass
+
+    return app.response_class(
+        stream(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ==============================
 # ROTAS CATEGORIAS
 # ==============================
 
@@ -186,6 +243,7 @@ def criar_categoria():
     nova = Categoria(nome=nome, cor=data.get("cor", "#1e4d8c"))
     db.session.add(nova)
     db.session.commit()
+    _broadcast("atualizar")
     return jsonify(nova.to_dict()), 201
 
 
@@ -199,6 +257,7 @@ def deletar_categoria(id):
         return jsonify({"erro": "Não encontrada"}), 404
     db.session.delete(cat)
     db.session.commit()
+    _broadcast("atualizar")
     return jsonify({"ok": True})
 
 
@@ -223,6 +282,7 @@ def criar_colaborador():
     )
     db.session.add(novo)
     db.session.commit()
+    _broadcast("atualizar")
     return {"status": "ok"}
 
 
@@ -247,6 +307,7 @@ def alterar_status_colaborador(id):
         return {"erro": "Não encontrado"}, 404
     c.ativo = not c.ativo
     db.session.commit()
+    _broadcast("atualizar")
     return {"ok": True}
 
 
@@ -261,6 +322,7 @@ def deletar_colaborador(id):
     Ficha.query.filter_by(colaborador_id=id).delete()
     db.session.delete(c)
     db.session.commit()
+    _broadcast("atualizar")
     return {"ok": True}
 
 
@@ -279,12 +341,13 @@ def criar_ficha():
         nome_ficha=data.get("nome_ficha"),
         tipo=data.get("tipo"),
         conteudo=data.get("conteudo"),
-        secao=data.get("secao") or "Geral",          # ← salva a seção
+        secao=data.get("secao") or "Geral",
         alterado_por=current_user.username,
         ultima_alteracao=datetime.now()
     )
     db.session.add(ficha)
     db.session.commit()
+    _broadcast("atualizar")
     return jsonify({"ok": True, "id": ficha.id})
 
 
@@ -298,7 +361,7 @@ def listar_fichas(colaborador_id):
         "tipo": f.tipo,
         "conteudo": f.conteudo,
         "secao": f.secao or "Geral",
-        "pago": f.pago or 0,           # ← ADICIONE ISSO
+        "pago": f.pago or 0,
         "alteradoPor": f.alterado_por or "",
         "ultimaAlteracao": f.ultima_alteracao.strftime("%Y-%m-%d %H:%M:%S") if f.ultima_alteracao else ""
     } for f in fichas])
@@ -314,6 +377,7 @@ def deletar_ficha(id):
         return {"erro": "Não encontrada"}, 404
     db.session.delete(ficha)
     db.session.commit()
+    _broadcast("atualizar")
     return {"ok": True}
 
 
@@ -680,11 +744,6 @@ def logout():
     return jsonify({"mensagem": "Logout realizado"})
 
 
-
-
-
-
-
 @app.route('/setup-usuario-temp-xyz123')
 def setup_usuario():
     from werkzeug.security import generate_password_hash
@@ -703,11 +762,6 @@ def setup_usuario():
             db.session.add(novo)
     db.session.commit()
     return 'Pronto!'
-
-
-
-
-
 
 
 # ==============================
@@ -745,6 +799,7 @@ def criar_conta():
     )
     db.session.add(nova)
     db.session.commit()
+    _broadcast("atualizar")
     return jsonify({"mensagem": "Conta criada"})
 
 
@@ -754,7 +809,6 @@ def atualizar_conta(id):
     conta = Conta.query.get_or_404(id)
     dados = request.json
 
-    # Não-admins só podem marcar como paga/não paga
     if current_user.tipo != "admin" and set(dados.keys()) - {"paga"}:
         return jsonify({"erro": "Acesso negado"}), 403
 
@@ -762,7 +816,6 @@ def atualizar_conta(id):
         conta.paga = dados["paga"]
         conta.data_pagamento = datetime.now() if dados["paga"] else None
 
-    # Campos editáveis por admin
     if current_user.tipo == "admin":
         if "categoria"           in dados: conta.categoria             = dados["categoria"]
         if "descricao"           in dados: conta.descricao             = dados["descricao"]
@@ -775,6 +828,7 @@ def atualizar_conta(id):
     conta.ultima_atualizacao = datetime.now()
     conta.alterado_por = current_user.username
     db.session.commit()
+    _broadcast("atualizar")
     return jsonify({"mensagem": "Conta atualizada"})
 
 @app.route("/api/contas/<int:id>", methods=["DELETE"])
@@ -785,6 +839,7 @@ def deletar_conta(id):
     conta = Conta.query.get_or_404(id)
     db.session.delete(conta)
     db.session.commit()
+    _broadcast("atualizar")
     return jsonify({"mensagem": "Conta deletada"})
 
 
@@ -824,10 +879,8 @@ def salvar_saldo():
     else:
         db.session.add(Saldo(valor=data["valor"]))
     db.session.commit()
+    _broadcast("atualizar")
     return jsonify({"mensagem": "Saldo salvo"})
-
-
-
 
 
 @app.route('/api/fichas/<int:id>/pago', methods=['PUT'])
@@ -839,6 +892,7 @@ def marcar_ficha_paga(id):
         return jsonify({"erro": "Não encontrada"}), 404
     ficha.pago = 1 if data.get('pago') else 0
     db.session.commit()
+    _broadcast("atualizar")
     return jsonify({"ok": True})
 
 
@@ -848,7 +902,7 @@ def dashboard_fichas():
     fichas = db.session.query(Ficha, Colaborador).join(
         Colaborador, Colaborador.id == Ficha.colaborador_id
     ).filter(Ficha.pago == 0, Colaborador.ativo == True).all()
-    
+
     return jsonify([{
         "id": f.id,
         "nome_ficha": f.nome_ficha,
@@ -856,7 +910,8 @@ def dashboard_fichas():
         "conteudo": f.conteudo,
         "colaborador_id": f.colaborador_id,
         "colab_nome": c.nome,
-        "colab_cargo": c.cargo
+        "colab_cargo": c.cargo,
+        "colab_pix": c.pix or ""
     } for f, c in fichas])
 
 # ==============================
@@ -878,8 +933,8 @@ def migrar_banco():
         ("conta",       "alterado_por",     "VARCHAR(100)"),
         ("ficha",       "alterado_por",     "VARCHAR(100)"),
         ("ficha",       "ultima_alteracao", "DATETIME"),
-        ("ficha",       "secao",            "VARCHAR(100)"),   # ← NOVA migração
-        ("ficha",       "pago",             "INTEGER DEFAULT 0"), 
+        ("ficha",       "secao",            "VARCHAR(100)"),
+        ("ficha",       "pago",             "INTEGER DEFAULT 0"),
     ]
     with db.engine.connect() as conn:
         for tabela, coluna, tipo in migracoes:
@@ -890,6 +945,22 @@ def migrar_banco():
             except Exception:
                 pass
 
+@app.route('/api/fichas/<int:id>/pagos-parciais', methods=['PUT'])
+@login_required
+def salvar_pagos_parciais(id):
+    ficha = Ficha.query.get(id)
+    if not ficha:
+        return jsonify({"erro": "Não encontrada"}), 404
+    data = request.get_json()
+    try:
+        conteudo = json.loads(ficha.conteudo or "{}")
+    except:
+        conteudo = {}
+    conteudo["__pagos_parciais__"] = data.get("pagos", [])
+    ficha.conteudo = json.dumps(conteudo)
+    db.session.commit()
+    _broadcast("atualizar")
+    return jsonify({"ok": True})
 
 if __name__ == "__main__":
     with app.app_context():

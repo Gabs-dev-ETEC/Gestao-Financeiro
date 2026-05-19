@@ -1088,6 +1088,7 @@ function abrirModalNovaFicha(colabId, secao) {
     abrirModalFicha(colaborador)
 }
 
+
 async function renderizarFichasEmContas() {
     const container = document.getElementById("fichasColabContainer");
     if (!container) return;
@@ -1098,53 +1099,87 @@ async function renderizarFichasEmContas() {
         const fichas = await res.json();
         if (fichas.length === 0) { container.innerHTML = ""; return; }
 
+        // ── Agrupa por colaborador ──────────────────────────────────────────
         const porColab = {};
         fichas.forEach(f => {
             if (!porColab[f.colaborador_id]) {
                 porColab[f.colaborador_id] = {
                     nome: f.colab_nome,
                     cargo: f.colab_cargo,
+                    pix: f.colab_pix || "",
                     fichas: []
                 };
             }
 
-            let liquido = 0;
-            try {
-                const dados    = JSON.parse(f.conteudo || "{}");
-                const campos   = f.tipo === "meta" ? CAMPOS_META : CAMPOS_NORMAL;
-                const riscados = dados["__riscados__"] || {};
-                const extras   = dados["__outros__"] || [];
+            let conteudo = {};
+            try { conteudo = JSON.parse(f.conteudo || "{}"); } catch (e) {}
 
-                campos.forEach(c => {
-                    if (!c.soValor || riscados[c.key] || c.soCaixa) return;
-                    const v = parseMoeda(dados[c.key] || "0");
-                    if (!c.somenteDesconto && !c.excluiLiquido) liquido += v;
-                    if (c.somenteDesconto) liquido -= v;
-                    if (c.temDesconto && !c.excluiLiquido) {
-                        const kd = c.keyDesc || null;
-                        if (kd) liquido -= parseMoeda(dados[kd] || "0");
-                    }
+            const campos        = f.tipo === "meta" ? CAMPOS_META : CAMPOS_NORMAL;
+            const riscados      = conteudo["__riscados__"]      || {};
+            const extras        = conteudo["__outros__"]        || [];
+            const pagosParciais = conteudo["__pagos_parciais__"] || [];
+
+            // Monta lista de itens visíveis
+            const itens = [];
+            campos.forEach(c => {
+                if (!c.soValor || c.soCaixa || riscados[c.key]) return;
+                const valor    = parseMoeda(conteudo[c.key] || "0");
+                const desconto = c.keyDesc ? parseMoeda(conteudo[c.keyDesc] || "0") : 0;
+                if (!valor && !desconto) return;
+                itens.push({
+                    key:           c.key,
+                    label:         c.label,
+                    valor:         c.somenteDesconto ? 0     : valor,
+                    desconto:      c.somenteDesconto ? valor : desconto,
+                    excluiLiquido: c.excluiLiquido || false
                 });
-                extras.forEach(ex => {
-                    if (ex.riscado) return;
-                    liquido += parseMoeda(ex.valor || "0");
-                    liquido -= parseMoeda(ex.desconto || "0");
+            });
+            extras.forEach((ex, i) => {
+                if (ex.riscado) return;
+                const valor    = parseMoeda(ex.valor    || "0");
+                const desconto = parseMoeda(ex.desconto || "0");
+                if (!valor && !desconto) return;
+                itens.push({
+                    key:           `__extra_${i}`,
+                    label:         ex.label || "Item extra",
+                    valor,
+                    desconto,
+                    excluiLiquido: false
                 });
-            } catch(e) {}
+            });
+
+            function calcLiquido(pagosList) {
+                let liq = 0;
+                itens.forEach(it => {
+                    if (it.excluiLiquido)             return;
+                    if (pagosList.includes(it.key))   return; // já pago
+                    liq += it.valor - it.desconto;
+                });
+                return liq;
+            }
 
             porColab[f.colaborador_id].fichas.push({
-                id:        f.id,
-                nome:      f.nome_ficha,
-                liquido,
-                criado_em: f.criado_em || null
+                id: f.id,
+                nome: f.nome_ficha,
+                liquido: calcLiquido(pagosParciais),
+                itens,
+                pagosParciais: [...pagosParciais],
+                calcLiquido
             });
         });
 
         container.innerHTML = "";
 
-        const titulo = document.createElement("div");
-        titulo.className = "categoria-bloco";
-        titulo.style.cssText = "--cat-cor: #1e4d8c;";
+        const totalFichas = fichas.length;
+        const calcTotalGeral = () =>
+            Object.values(porColab)
+                .flatMap(c => c.fichas)
+                .reduce((s, f) => s + f.liquido, 0);
+
+        // ── Bloco externo (categoria-bloco) ────────────────────────────────
+        const blocoDiv = document.createElement("div");
+        blocoDiv.className = "categoria-bloco";
+        blocoDiv.style.setProperty("--cat-cor", "#1e4d8c");
 
         const header = document.createElement("div");
         header.className = "categoria-header";
@@ -1155,21 +1190,23 @@ async function renderizarFichasEmContas() {
             <div class="categoria-icon" style="background:#1e4d8c20;color:#1e4d8c;font-size:14px;font-weight:700;">CO</div>
             <div>
                 <span class="categoria-nome">Colaboradores</span>
-                <span class="categoria-count">${fichas.length} ficha${fichas.length !== 1 ? "s" : ""} pendente${fichas.length !== 1 ? "s" : ""}</span>
+                <span class="categoria-count">${totalFichas} ficha${totalFichas !== 1 ? "s" : ""} pendente${totalFichas !== 1 ? "s" : ""}</span>
             </div>`;
-
-        const totalGeral = Object.values(porColab)
-            .flatMap(c => c.fichas)
-            .reduce((s, f) => s + f.liquido, 0);
 
         const right = document.createElement("div");
         right.className = "categoria-header-right";
         right.innerHTML = `
-            <span class="categoria-total" style="color:#1e4d8c">${formatarMoeda(totalGeral)}</span>
+            <span class="categoria-total" style="color:#1e4d8c">${formatarMoeda(calcTotalGeral())}</span>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 20 20"
                 fill="currentColor" style="color:var(--texto-suave);transition:transform 0.3s;flex-shrink:0;">
                 <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
             </svg>`;
+
+        // Helper: recalcula e atualiza o valor exibido no header do bloco
+        function atualizarHeaderTotal() {
+            const totalEl = right.querySelector(".categoria-total");
+            if (totalEl) totalEl.textContent = formatarMoeda(calcTotalGeral());
+        }
 
         header.appendChild(left);
         header.appendChild(right);
@@ -1178,39 +1215,226 @@ async function renderizarFichasEmContas() {
         lista.className = "contas-lista";
         lista.style.display = "none";
 
-Object.entries(porColab).forEach(([colabId, { nome, cargo, fichas: fichasColab }]) => {
-    fichasColab.forEach(f => {
-        const card = document.createElement("div");
-        card.className = "conta-card";
-        card.style.cursor = "pointer";
-        card.innerHTML = `
-            <div class="conta-card-barra" style="background:#1e4d8c;"></div>
-            <div class="conta-card-corpo">
-                <div class="conta-card-topo">
-                    <span class="conta-descricao">${nome}</span>
-                    <span class="conta-valor">${formatarMoeda(f.liquido)}</span>
-                </div>
-                <div class="conta-card-rodape">
+        // ── Um card por ficha de cada colaborador ──────────────────────────
+        Object.entries(porColab).forEach(([colabId, { nome, cargo, pix, fichas: fichasColab }]) => {
+            fichasColab.forEach(f => {
+
+                const card = document.createElement("div");
+                card.className = "conta-card";
+                card.style.cssText = "flex-direction:column;align-items:stretch;cursor:default;padding:0;overflow:hidden;";
+
+                // Cabeçalho do card
+                const cardHeader = document.createElement("div");
+                cardHeader.style.cssText = `
+                    display:flex;align-items:center;gap:0;padding:10px 12px 10px 0;
+                    cursor:pointer;position:relative;`;
+
+                const barra = document.createElement("div");
+                barra.className = "conta-card-barra";
+                barra.style.background = "#1e4d8c";
+
+                const corpo = document.createElement("div");
+                corpo.className = "conta-card-corpo";
+                corpo.style.flex = "1";
+
+                const topo = document.createElement("div");
+                topo.className = "conta-card-topo";
+                topo.innerHTML = `
+                    <span class="conta-descricao" style="font-weight:700;">${nome}</span>
+                    <span class="conta-valor" id="valorFicha_${f.id}">${formatarMoeda(f.liquido)}</span>`;
+
+                const rodape = document.createElement("div");
+                rodape.className = "conta-card-rodape";
+                rodape.innerHTML = `
                     <span class="conta-metodo">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="9" cy="7" r="4"/>
                             <path d="M2 21v-2a4 4 0 014-4h6a4 4 0 014 4v2"/>
                         </svg>
                         ${cargo || "Colaborador"}
                     </span>
-                    <span class="badge badge-normal">${f.nome}</span>
-                </div>
-            </div>
-            <svg class="conta-card-seta" width="16" height="16" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="9 18 15 12 9 6"/>
-            </svg>
-        `;
-        card.addEventListener("click", () => abrirFichaDeContas(parseInt(colabId), f.id));
-        lista.appendChild(card);
-    });
-});
+                    <span class="badge badge-normal">${f.nome}</span>`;
+
+                corpo.appendChild(topo);
+                corpo.appendChild(rodape);
+
+                // Seta de expansão
+                const seta = document.createElement("svg");
+                seta.setAttribute("width", "16"); seta.setAttribute("height", "16");
+                seta.setAttribute("viewBox", "0 0 24 24"); seta.setAttribute("fill", "none");
+                seta.setAttribute("stroke", "currentColor"); seta.setAttribute("stroke-width", "2");
+                seta.style.cssText = "color:var(--texto-suave);transition:transform 0.25s;flex-shrink:0;margin-right:10px;";
+                seta.innerHTML = `<polyline points="9 18 15 12 9 6"/>`;
+
+                cardHeader.appendChild(barra);
+                cardHeader.appendChild(corpo);
+                cardHeader.appendChild(seta);
+
+                // Painel expandido (itens + pix)
+                const painel = document.createElement("div");
+                painel.style.cssText = `
+                    display:none;flex-direction:column;gap:0;
+                    background:var(--cinza-claro);border-top:1px solid var(--cinza-borda);`;
+
+                // PIX do colaborador
+                if (pix) {
+                    const pixRow = document.createElement("div");
+                    pixRow.style.cssText = `
+                        display:flex;align-items:center;gap:8px;
+                        padding:8px 14px;border-bottom:1px solid var(--cinza-borda);
+                        background:#eef4ff;`;
+                    pixRow.innerHTML = `
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1e4d8c" stroke-width="2.2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                            <path d="M2 17l10 5 10-5"/>
+                            <path d="M2 12l10 5 10-5"/>
+                        </svg>
+                        <span style="font-size:0.78rem;color:#1e4d8c;font-weight:600;flex:1;
+                            overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pix}</span>
+                        <button onclick="navigator.clipboard.writeText('${pix.replace(/'/g, "\\'")}').then(()=>mostrarPopup('PIX copiado!'))"
+                            style="background:#1e4d8c;color:#fff;border:none;border-radius:5px;
+                            padding:3px 10px;font-size:0.72rem;cursor:pointer;
+                            font-family:'Barlow Condensed',sans-serif;font-weight:700;white-space:nowrap;">
+                            Copiar PIX
+                        </button>`;
+                    painel.appendChild(pixRow);
+                }
+
+                // ── Itens da ficha com checkbox ────────────────────────────
+                f.itens.forEach(item => {
+                    const isPago = f.pagosParciais.includes(item.key);
+                    const itemRow = document.createElement("div");
+                    itemRow.style.cssText = `
+                        display:flex;align-items:center;gap:10px;
+                        padding:7px 14px;border-bottom:1px solid var(--cinza-borda);
+                        transition:background 0.15s;`;
+
+                    const chk = document.createElement("input");
+                    chk.type    = "checkbox";
+                    chk.checked = isPago;
+                    chk.style.cssText = "width:15px;height:15px;cursor:pointer;accent-color:#1a7a4a;flex-shrink:0;";
+
+                    const labelEl = document.createElement("span");
+                    labelEl.style.cssText = `flex:1;font-size:0.82rem;color:var(--texto);
+                        ${isPago ? "text-decoration:line-through;opacity:0.45;" : ""}`;
+                    labelEl.textContent = item.label;
+
+                    const valoresEl = document.createElement("div");
+                    valoresEl.style.cssText = "display:flex;flex-direction:column;align-items:flex-end;gap:1px;";
+
+                    if (item.valor) {
+                        const vSpan = document.createElement("span");
+                        vSpan.style.cssText = `font-size:0.82rem;font-weight:700;
+                            color:${isPago ? "#aab2c0" : "#15803d"};
+                            ${isPago ? "text-decoration:line-through;" : ""}`;
+                        vSpan.textContent = formatarMoeda(item.valor);
+                        valoresEl.appendChild(vSpan);
+                    }
+                    if (item.desconto) {
+                        const dSpan = document.createElement("span");
+                        dSpan.style.cssText = `font-size:0.75rem;font-weight:600;
+                            color:${isPago ? "#aab2c0" : "#c0392b"};
+                            ${isPago ? "text-decoration:line-through;" : ""}`;
+                        dSpan.textContent = `- ${formatarMoeda(item.desconto)}`;
+                        valoresEl.appendChild(dSpan);
+                    }
+
+                    // ── Ao marcar/desmarcar item ───────────────────────────
+                    chk.addEventListener("change", async () => {
+                        // 1. Atualiza estado local
+                        if (chk.checked) {
+                            if (!f.pagosParciais.includes(item.key))
+                                f.pagosParciais.push(item.key);
+                        } else {
+                            f.pagosParciais = f.pagosParciais.filter(k => k !== item.key);
+                        }
+
+                        // 2. Atualiza visual do item
+                        const pago = chk.checked;
+                        labelEl.style.textDecoration = pago ? "line-through" : "";
+                        labelEl.style.opacity        = pago ? "0.45" : "";
+                        valoresEl.querySelectorAll("span").forEach((s, i) => {
+                            s.style.textDecoration = pago ? "line-through" : "";
+                            s.style.color = pago ? "#aab2c0" : (i === 0 ? "#15803d" : "#c0392b");
+                        });
+
+                        // 3. Recalcula e atualiza valor no card
+                        const novoLiquido = f.calcLiquido(f.pagosParciais);
+                        f.liquido = novoLiquido;
+                        const elValor = document.getElementById(`valorFicha_${f.id}`);
+                        if (elValor) elValor.textContent = formatarMoeda(novoLiquido);
+
+                        // 4. ✅ CORREÇÃO: atualiza header total imediatamente
+                        atualizarHeaderTotal();
+
+                        // 5. Persiste pagos parciais no servidor
+                        await fetch(`/api/fichas/${f.id}/pagos-parciais`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ pagos: f.pagosParciais })
+                        });
+
+                        // 6. Verifica se TODOS os itens estão pagos
+                        const todosItensPagos = f.itens.every(it =>
+                            f.pagosParciais.includes(it.key)
+                        );
+
+                        if (todosItensPagos) {
+                            // Marca a ficha como paga no servidor
+                            await fetch(`/api/fichas/${f.id}/pago`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ pago: true })
+                            });
+
+                            // ✅ CORREÇÃO: Remove apenas o card, NÃO fecha a tela
+                            card.style.transition = "opacity 0.4s, max-height 0.4s";
+                            card.style.opacity    = "0";
+                            card.style.overflow   = "hidden";
+                            card.style.maxHeight  = card.offsetHeight + "px";
+                            setTimeout(() => {
+                                card.style.maxHeight = "0";
+                                card.style.padding   = "0";
+                            }, 50);
+                            setTimeout(() => {
+                                card.remove();
+
+                                // Se não sobrou nenhum card, remove o bloco inteiro
+                                if (lista.querySelectorAll(".conta-card").length === 0) {
+                                    blocoDiv.style.transition = "opacity 0.3s";
+                                    blocoDiv.style.opacity    = "0";
+                                    setTimeout(() => blocoDiv.remove(), 300);
+                                }
+                            }, 450);
+
+                            mostrarPopup("Ficha marcada como paga! ✅");
+                        }
+
+                        // 7. Atualiza totais gerais da aba contas (saldo final etc.)
+                        await atualizarTotais();
+                    });
+
+                    itemRow.appendChild(chk);
+                    itemRow.appendChild(labelEl);
+                    itemRow.appendChild(valoresEl);
+                    painel.appendChild(itemRow);
+                });
+
+                // Toggle do painel ao clicar no header
+                let expandido = false;
+                cardHeader.addEventListener("click", () => {
+                    expandido = !expandido;
+                    painel.style.display = expandido ? "flex" : "none";
+                    seta.style.transform = expandido ? "rotate(90deg)" : "";
+                });
+
+                card.appendChild(cardHeader);
+                card.appendChild(painel);
+                lista.appendChild(card);
+            });
+        });
+
+        // ── Toggle da categoria inteira ────────────────────────────────────
         let aberto = false;
         const setaEl = right.querySelector("svg");
         header.addEventListener("click", () => {
@@ -1219,11 +1443,11 @@ Object.entries(porColab).forEach(([colabId, { nome, cargo, fichas: fichasColab }
             setaEl.style.transform = aberto ? "rotate(180deg)" : "";
         });
 
-        titulo.appendChild(header);
-        titulo.appendChild(lista);
-        container.appendChild(titulo);
+        blocoDiv.appendChild(header);
+        blocoDiv.appendChild(lista);
+        container.appendChild(blocoDiv);
 
-    } catch(e) {
+    } catch (e) {
         console.error("Erro ao renderizar fichas em contas:", e);
     }
 }
