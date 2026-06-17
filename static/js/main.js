@@ -1,6 +1,3 @@
-
-
-
 // ================= HELPERS DE NAVEGAÇÃO =================
 
 function setActiveView(viewId) {
@@ -210,11 +207,11 @@ function formatarDataRelativa(dataString, alteradoPor = "") {
         : `${diffDias} dias atrás`
     const horas   = data.getHours().toString().padStart(2,'0')
     const minutos = data.getMinutes().toString().padStart(2,'0')
-    // Nome: pega só o primeiro nome para não poluir
     const primeiroNome = alteradoPor ? alteradoPor.trim().split(" ")[0] : ""
     const sufixo = primeiroNome ? ` por ${primeiroNome}` : ""
     return `Atualizado ${diaRelativo}, às ${horas}:${minutos}${sufixo}`
 }
+
 // ================= TOTAIS =================
 
 async function atualizarTotais() {
@@ -258,7 +255,7 @@ async function atualizarTotais() {
                 totalAPagar += liquido
             })
         }
-} catch(e) {}
+    } catch(e) {}
 
     await renderizarFichasEmContas();
 
@@ -440,7 +437,6 @@ function renderizarCategorias(showOverdueOnly = false) {
 
 // ================= EDITAR CONTA =================
 
-
 async function salvarEdicaoConta() {
     if (!contaAtualCategoria || contaAtualIndex === -1) return
     const conta = contas[contaAtualCategoria][contaAtualIndex]
@@ -455,8 +451,6 @@ async function salvarEdicaoConta() {
         observacoes:         document.getElementById('editObservacoesInput').value
     }
 
-    console.log('[editar conta] payload:', dadosAtualizados)
-
     if (!dadosAtualizados.descricao || isNaN(dadosAtualizados.valor)) {
         mostrarPopup('Preencha os campos obrigatórios.')
         return
@@ -468,8 +462,6 @@ async function salvarEdicaoConta() {
         body: JSON.stringify(dadosAtualizados)
     })
 
-    console.log('[editar conta] status resposta:', res.status)
-
     if (res.ok) {
         fecharModalEdicao()
         mostrarPopup('Conta atualizada com sucesso!')
@@ -477,7 +469,6 @@ async function salvarEdicaoConta() {
         setActiveView('contasView')
     } else {
         const erro = await res.json().catch(() => ({}))
-        console.error('[editar conta] erro:', erro)
         mostrarPopup('Erro ao salvar alterações.')
     }
 }
@@ -490,7 +481,6 @@ function abrirModalEdicao() {
     if (!contaAtualCategoria || contaAtualIndex === -1) return
     const conta = contas[contaAtualCategoria][contaAtualIndex]
 
-    // Preencher o select de categorias do modal
     const sel = document.getElementById('editCategoriaInput')
     sel.innerHTML = '<option value="" disabled>Selecione a Categoria</option>'
     _categorias.forEach(cat => {
@@ -501,25 +491,24 @@ function abrirModalEdicao() {
         sel.appendChild(opt)
     })
 
-    // Preencher os campos com os dados atuais
-    document.getElementById('editDescricaoInput').value          = conta.descricao || ''
-    document.getElementById('editValorInput').value              = conta.valor || ''
-    document.getElementById('editVencimentoInput').value         = conta.vencimento || ''
+    document.getElementById('editDescricaoInput').value           = conta.descricao || ''
+    document.getElementById('editValorInput').value               = conta.valor || ''
+    document.getElementById('editVencimentoInput').value          = conta.vencimento || ''
     document.getElementById('editMetodoPagamentoTipoInput').value = conta.metodoPagamentoTipo || ''
-    document.getElementById('editMetodoPagamentoValorInput').value = conta.metodoPagamento || ''
-    document.getElementById('editObservacoesInput').value        = conta.observacoes || ''
+    document.getElementById('editMetodoPagamentoValorInput').value= conta.metodoPagamento || ''
+    document.getElementById('editObservacoesInput').value         = conta.observacoes || ''
 
-    // Exibir o modal
-    const modal = document.getElementById('modalEditarConta')
-    modal.style.display = 'flex'
+    document.getElementById('modalEditarConta').style.display = 'flex'
 }
+
 // ================= DETALHES =================
+
 function mostrarDetalhes(conta, categoria, index) {
     const editButton = document.getElementById('editButton')
-if (editButton) editButton.style.display = IS_ADMIN ? '' : 'none'
+    if (editButton) editButton.style.display = IS_ADMIN ? '' : 'none'
     setActiveView('detalhesView')
     detalhesAtualizacaoElement.textContent = conta.ultimaAtualizacao
-        ? formatarDataRelativa(conta.ultimaAtualizacao, conta.alteradoPor || "")  // ← NOVO: segundo argumento
+        ? formatarDataRelativa(conta.ultimaAtualizacao, conta.alteradoPor || "")
         : ''
     detalhesNomeElement.textContent        = conta.descricao
     detalhesValorElement.textContent       = formatarMoeda(conta.valor)
@@ -532,6 +521,7 @@ if (editButton) editButton.style.display = IS_ADMIN ? '' : 'none'
     contaAtualCategoria                    = categoria
     if (deleteButton) deleteButton.style.display = IS_ADMIN ? '' : 'none'
 }
+
 // ================= PAGAR / EXCLUIR =================
 
 pagaCheck.addEventListener('change', async () => {
@@ -681,72 +671,67 @@ if (importButton) {
             return
         }
         const reader = new FileReader()
-reader.onload = async function(e) {
-    try {
-        const rows = e.target.result
-            .split('\n')
-            .map(r => r.trim())
-            .filter(r => r.length > 0)
+        reader.onload = async function(e) {
+            try {
+                const rows = e.target.result
+                    .split('\n')
+                    .map(r => r.trim())
+                    .filter(r => r.length > 0)
 
-        if (rows.length < 2) throw new Error("Arquivo vazio ou sem dados suficientes.")
+                if (rows.length < 2) throw new Error("Arquivo vazio ou sem dados suficientes.")
 
-        // Detecta separador automaticamente (vírgula ou ponto e vírgula)
-        const separador = rows[0].includes(';') ? ';' : ','
+                const separador = rows[0].includes(';') ? ';' : ','
+                const headers = rows[0].split(separador).map(h => h.trim().replace(/^"|"$/g, ''))
+                if (JSON.stringify(headers) !== JSON.stringify(CSV_FILE_HEADERS))
+                    throw new Error(`Cabeçalhos inválidos. Esperado: ${CSV_FILE_HEADERS.join(', ')}`)
 
-        const headers = rows[0].split(separador).map(h => h.trim().replace(/^"|"$/g, ''))
-        if (JSON.stringify(headers) !== JSON.stringify(CSV_FILE_HEADERS))
-            throw new Error(`Cabeçalhos inválidos. Esperado: ${CSV_FILE_HEADERS.join(', ')}`)
+                importMessage.textContent = "Importando..."
+                importButton.disabled = true
 
-        importMessage.textContent = "Importando..."
-        importButton.disabled = true
+                let importedCount = 0, erros = 0
 
-        let importedCount = 0, erros = 0
+                for (const row of rows.slice(1)) {
+                    const values = row.split(separador).map(v => v.trim().replace(/^"|"$/g, ''))
+                    while (values.length < CSV_FILE_HEADERS.length) values.push('')
 
-        for (const row of rows.slice(1)) {
-            // Split respeitando campos entre aspas
-            const values = row.split(separador).map(v => v.trim().replace(/^"|"$/g, ''))
+                    const novaConta = {
+                        categoria:           values[0],
+                        descricao:           values[1],
+                        valor:               parseFloat(values[2].replace(',', '.')),
+                        vencimento:          values[3],
+                        metodoPagamentoTipo: values[4],
+                        metodoPagamento:     values[5],
+                        observacoes:         values[6] || ""
+                    }
 
-            // Preenche campos faltando com string vazia
-            while (values.length < CSV_FILE_HEADERS.length) values.push('')
+                    if (!novaConta.categoria || !novaConta.descricao || isNaN(novaConta.valor)) continue
 
-            const novaConta = {
-                categoria:           values[0],
-                descricao:           values[1],
-                valor:               parseFloat(values[2].replace(',', '.')),
-                vencimento:          values[3],
-                metodoPagamentoTipo: values[4],
-                metodoPagamento:     values[5],
-                observacoes:         values[6] || ""
+                    const res = await fetch("/api/contas", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(novaConta)
+                    })
+
+                    if (res.ok) importedCount++
+                    else erros++
+                }
+
+                await carregarContasDoServidor()
+                csvFileInput.value = ""
+
+                if (erros > 0)
+                    importMessage.textContent = `${importedCount} importada(s), ${erros} com erro.`
+                else
+                    importMessage.textContent = `✅ ${importedCount} conta(s) importada(s) com sucesso!`
+
+                if (importedCount > 0) mostrarPopup(`${importedCount} conta(s) importada(s)!`)
+
+            } catch (err) {
+                importMessage.textContent = `Erro: ${err.message}`
+            } finally {
+                importButton.disabled = false
             }
-
-            if (!novaConta.categoria || !novaConta.descricao || isNaN(novaConta.valor)) continue
-
-            const res = await fetch("/api/contas", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(novaConta)
-            })
-
-            if (res.ok) importedCount++
-            else erros++
         }
-
-        await carregarContasDoServidor()
-        csvFileInput.value = ""
-
-        if (erros > 0)
-            importMessage.textContent = `${importedCount} importada(s), ${erros} com erro.`
-        else
-            importMessage.textContent = `✅ ${importedCount} conta(s) importada(s) com sucesso!`
-
-        if (importedCount > 0) mostrarPopup(`${importedCount} conta(s) importada(s)!`)
-
-    } catch (err) {
-        importMessage.textContent = `Erro: ${err.message}`
-    } finally {
-        importButton.disabled = false
-    }
-}
         reader.readAsText(file)
     })
 }
@@ -828,6 +813,48 @@ if (returnButton) {
     })
 }
 
+// ================= ENTER PARA CONFIRMAR =================
+
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return
+    const tag = e.target.tagName
+    if (tag === 'TEXTAREA') return  // Enter em textarea = quebra de linha, não submete
+
+    const id = e.target.id
+
+    // Saldo inicial
+    if (id === 'saldoInicialInput') {
+        document.getElementById('updateSaldoButton')?.click()
+        return
+    }
+
+    // Nova categoria
+    if (id === 'nomeNovaCategoria') {
+        adicionarCategoria()
+        return
+    }
+
+    // Formulário de nova conta (qualquer campo do form)
+    const camposNovaConta = ['categoriaInput','descricaoInput','valorInput','vencimentoInput','metodoPagamentoTipoInput']
+    if (camposNovaConta.includes(id)) {
+        document.querySelector('#contaForm button[type="submit"]')?.click()
+        return
+    }
+
+    // Formulário de colaborador
+    const camposColab = ['nomeColaborador','cpf','numeroColaborador','cargoColaborador','pixColaborador']
+    if (camposColab.includes(id)) {
+        document.querySelector('#colaboradorForm button[type="submit"]')?.click()
+        return
+    }
+
+    // Modal de edição de conta
+    const camposEdicao = ['editDescricaoInput','editValorInput','editVencimentoInput','editCategoriaInput','editMetodoPagamentoTipoInput']
+    if (camposEdicao.includes(id)) {
+        document.getElementById('btnSalvarEdicao')?.click()
+        return
+    }
+})
 
 // ================= INICIALIZAÇÃO =================
 

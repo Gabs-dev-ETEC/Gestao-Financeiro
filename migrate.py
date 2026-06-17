@@ -16,6 +16,7 @@ with app.app_context():
 
     # Usuários
     usuarios = [
+        {"username": "2319",                               "password": "2319", "tipo": "admin"},
         {"username": "Bruna Emilly Viana Siqueira",        "password": "07663696174", "tipo": "admin"},
         {"username": "Patricia Pereira de Oliveira",        "password": "07626243102", "tipo": "admin"},
         {"username": "Mateus Santo Silva",                  "password": "05405469173", "tipo": "admin"},
