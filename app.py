@@ -748,13 +748,13 @@ def logout():
 def setup_usuario():
     from werkzeug.security import generate_password_hash
     usuarios = [
-    criar_usuario("07663696174", "07663696174", "admin")
-    criar_usuario("07626243102", "07626243102", "admin")
-    criar_usuario("05405469173", "05405469173", "admin")
-    criar_usuario("03774249199", "03774249199", "admin")
-    criar_usuario("07626249143", "07626249143", "admin")
+       criar_usuario("07663696174", "07663696174", "admin"),
+    criar_usuario("07626243102", "07626243102", "admin"),
+    criar_usuario("05405469173", "05405469173", "admin"),
+    criar_usuario("03774249199", "03774249199", "admin"),
+    criar_usuario("07626249143", "07626249143", "admin"),
 
-    criar_usuario("86496824134", "86496824134", "user") 
+    criar_usuario("86496824134", "86496824134", "usuario"), 
     ]
     for username, senha, tipo in usuarios:
         existe = Usuario.query.filter_by(username=username).first()
