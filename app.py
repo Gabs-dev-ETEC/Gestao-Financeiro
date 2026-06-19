@@ -764,6 +764,11 @@ def setup_usuario():
     return 'Pronto!'
 
 
+@app.route('/debug-usuarios-temp-xyz123')
+def debug_usuarios():
+    usuarios = Usuario.query.all()
+    return jsonify([{"id": u.id, "username": u.username, "tipo": u.tipo} for u in usuarios])
+
 # ==============================
 # ROTAS CONTAS
 # ==============================
