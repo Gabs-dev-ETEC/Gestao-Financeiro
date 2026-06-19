@@ -962,7 +962,7 @@ def salvar_pagos_parciais(id):
     _broadcast("atualizar")
     return jsonify({"ok": True})
 
-if __name__ == "__main__":
+def inicializar_banco():
     with app.app_context():
         db.create_all()
         migrar_banco()
@@ -976,4 +976,7 @@ if __name__ == "__main__":
 
         db.session.commit()
 
+inicializar_banco()
+
+if __name__ == "__main__":
     app.run(host='0.0.0.0', port=10000, debug=False)
